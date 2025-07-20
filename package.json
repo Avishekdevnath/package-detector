@@ -1,0 +1,62 @@
+{
+  "name": "@avishekdevnath/package-detector",
+  "version": "1.0.0",
+  "description": "A powerful CLI tool to detect unused packages, outdated dependencies, duplicated modules, and heavy packages",
+  "main": "dist/index.js",
+  "bin": {
+    "package-detector": "./dist/bin/index.js"
+  },
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/bin/index.js",
+    "dev": "ts-node bin/index.ts",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "lint": "echo \"No linter configured\"",
+    "clean": "rimraf dist"
+  },
+  "keywords": [
+    "cli",
+    "package",
+    "detector",
+    "unused",
+    "outdated",
+    "duplicates",
+    "heavy",
+    "dependencies",
+    "npm",
+    "analysis"
+  ],
+  "author": "Avishek Devnath",
+  "license": "MIT",
+  "dependencies": {
+    "@types/node": "^24.0.15",
+    "axios": "^1.10.0",
+    "chalk": "^4.1.2",
+    "npm-which": "^3.0.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3",
+    "webpack": "^5.100.2"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "jest": "^30.0.4",
+    "rimraf": "^5.0.10",
+    "ts-jest": "^29.4.0"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/avishekdevnath/package-detector.git"
+  },
+  "bugs": {
+    "url": "https://github.com/avishekdevnath/package-detector/issues"
+  },
+  "homepage": "https://github.com/avishekdevnath/package-detector#readme"
+}
