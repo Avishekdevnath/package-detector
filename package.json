@@ -1,7 +1,7 @@
 {
-  "name": "@avishekdevnath/package-detector",
+  "name": "package-detector",
   "version": "1.0.0",
-  "description": "A powerful CLI tool to detect unused packages, outdated dependencies, duplicated modules, and heavy packages",
+  "description": "A fast and comprehensive Node.js CLI tool to analyze your project's package.json and detect various package-related issues",
   "main": "dist/index.js",
   "bin": {
     "package-detector": "./dist/bin/index.js"

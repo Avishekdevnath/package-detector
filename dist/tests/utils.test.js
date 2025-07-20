@@ -13,6 +13,7 @@ const mockStatSync = fs_1.statSync;
 const mockExecSync = child_process_1.execSync;
 describe('Utils', () => {
     beforeEach(() => {
+        (0, utils_1.clearCaches)();
         jest.clearAllMocks();
     });
     describe('readPackageJson', () => {
@@ -295,6 +296,19 @@ Not a package line
             mockReadFileSync.mockReturnValue(content);
             const result = (0, utils_1.isPackageUsed)('unused-package', projectFiles);
             expect(result).toBe(false);
+        });
+        it('should use caching for repeated calls', () => {
+            const projectFiles = ['test.js'];
+            const content = "import React from 'react';";
+            mockReadFileSync.mockReturnValue(content);
+            // First call should read file
+            const result1 = (0, utils_1.isPackageUsed)('react', projectFiles);
+            expect(result1).toBe(true);
+            expect(mockReadFileSync).toHaveBeenCalledTimes(1);
+            // Second call should use cache
+            const result2 = (0, utils_1.isPackageUsed)('react', projectFiles);
+            expect(result2).toBe(true);
+            expect(mockReadFileSync).toHaveBeenCalledTimes(1); // Still 1, not 2
         });
     });
     describe('Package name utilities', () => {

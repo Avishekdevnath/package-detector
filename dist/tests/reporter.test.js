@@ -127,16 +127,16 @@ describe('Reporter', () => {
             expect(console.log).toHaveBeenCalledWith('✅ No issues detected! Your package.json looks clean.');
         });
         it('should display unused packages', () => {
-            const unusedResult = {
+            const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+            reporter.addResult({
                 type: 'unused',
                 packageName: 'unused-package',
-                message: 'Not imported anywhere',
-                severity: 'medium'
-            };
-            reporter.addResult(unusedResult);
+                message: 'Not imported anywhere'
+            });
             reporter.printResults();
-            expect(console.log).toHaveBeenCalledWith('\n❌ Unused Packages:');
+            expect(console.log).toHaveBeenCalledWith('\n❌ Truly Unused Packages:');
             expect(console.log).toHaveBeenCalledWith('  • unused-package - Not imported anywhere');
+            consoleSpy.mockRestore();
         });
         it('should display outdated packages', () => {
             const outdatedResult = {
@@ -186,7 +186,7 @@ describe('Reporter', () => {
             reporter.printResults();
             expect(console.log).toHaveBeenCalledWith('📊 Summary:');
             expect(console.log).toHaveBeenCalledWith('  Total issues found: 5');
-            expect(console.log).toHaveBeenCalledWith('  Unused packages: 2');
+            expect(console.log).toHaveBeenCalledWith('  Truly unused packages: 2');
             expect(console.log).toHaveBeenCalledWith('  Outdated packages: 1');
             expect(console.log).toHaveBeenCalledWith('  Duplicate packages: 1');
             expect(console.log).toHaveBeenCalledWith('  Heavy packages: 1');
