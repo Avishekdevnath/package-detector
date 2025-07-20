@@ -40,15 +40,22 @@ The package detector is built with performance in mind:
 
 ## Installation
 
+### Global Installation
 ```bash
-npm install -g @avishekdevnath/package-detector
+npm install -g package-detector
+```
+
+### Using npx (Recommended)
+```bash
+npx package-detector --help
 ```
 
 ## Usage
 
 ```bash
-# Run all detectors
+# Run all detectors (default)
 npx package-detector
+npx package-detector --all
 
 # Run specific detectors
 npx package-detector --unused
@@ -116,6 +123,89 @@ On a typical project with:
 - Unused package detection: ~1-3 seconds (80% faster)
 - Heavy package detection: ~10-20 seconds (70% faster with parallel calls)
 
+## Development
+
+### Prerequisites
+- Node.js >= 14.0.0
+- npm or yarn
+
+### Setup
+```bash
+# Clone the repository
+git clone https://github.com/avishekdevnath/package-detector.git
+cd package-detector
+
+# Install dependencies
+npm install
+
+# Build the project
+npm run build
+
+# Run tests
+npm test
+
+# Run in development mode
+npm run dev
+```
+
+### Available Scripts
+```bash
+npm run build      # Build the TypeScript project
+npm run test       # Run all tests
+npm run dev        # Run in development mode
+npm run clean      # Clean build artifacts
+npm start          # Run the CLI
+```
+
+### Project Structure
+```
+package-detector/
+├── bin/
+│   └── index.ts           # CLI Entry point
+├── src/
+│   ├── analyzer.ts        # Unused package detection
+│   ├── heavyChecker.ts    # Bundlephobia integration
+│   ├── outdatedChecker.ts # Outdated package detection
+│   ├── duplicateChecker.ts# Duplicate package detection
+│   ├── reporter.ts        # CLI output with chalk
+│   └── utils.ts           # Shared utilities
+├── tests/
+│   ├── analyzer.test.ts   # Analyzer tests
+│   ├── reporter.test.ts   # Reporter tests
+│   └── utils.test.ts      # Utils tests
+├── package.json
+├── tsconfig.json
+└── README.md
+```
+
+## Publishing to npm
+
+### First Time Setup
+```bash
+# Login to npm
+npm login
+
+# Build the project
+npm run build
+
+# Publish
+npm publish
+```
+
+### Updating the Package
+```bash
+# Update version in package.json
+npm version patch  # or minor, major
+
+# Build and publish
+npm run build
+npm publish
+```
+
+### Publishing Scoped vs Unscoped Packages
+- **Unscoped** (current): `package-detector` - Clean, memorable name
+- **Scoped**: `@username/package-detector` - Prevents naming conflicts
+
 ## Contributing
 
 1. Fork the repository
@@ -127,3 +217,13 @@ On a typical project with:
 ## License
 
 MIT License - see LICENSE file for details.
+
+## Author
+
+**Avishek Devnath**
+- GitHub: [@avishekdevnath](https://github.com/avishekdevnath)
+- NPM: [package-detector](https://www.npmjs.com/package/package-detector)
+
+---
+
+⭐ If you find this tool helpful, please give it a star on GitHub!

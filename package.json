@@ -1,6 +1,6 @@
 {
   "name": "package-detector",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A fast and comprehensive Node.js CLI tool to analyze your project's package.json and detect various package-related issues",
   "main": "dist/index.js",
   "bin": {
@@ -37,7 +37,9 @@
     "axios": "^1.10.0",
     "chalk": "^4.1.2",
     "ts-node": "^10.9.2",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "@octokit/rest": "^20.0.2",
+    "simple-git": "^3.22.0"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",

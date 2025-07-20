@@ -141,6 +141,23 @@ export class Reporter {
     console.log(chalk.gray('  --all         Run all detectors (default)'));
     console.log(chalk.gray('  --help        Show this help message'));
   }
+
+  printGitHubHelp(): void {
+    console.log('\n🔗 GitHub Integration Usage:');
+    console.log('  npx package-detector --github --repo <owner/repo> --analyze');
+    console.log('  npx package-detector --github --repo <owner/repo> --update --token <GITHUB_TOKEN> [--labels label1,label2] [--reviewers user1,user2] [--commit-message "msg"]');
+    console.log('\nOptions:');
+    console.log('  --github         Enable GitHub integration commands');
+    console.log('  --repo           GitHub repository (owner/repo or URL)');
+    console.log('  --token          GitHub personal access token (or set GITHUB_TOKEN env variable)');
+    console.log('  --branch         Base branch (default: main)');
+    console.log('  --analyze        Analyze repository and show info');
+    console.log('  --update         Create PR for dependency updates');
+    console.log('  --labels         Comma-separated PR labels (e.g. dependencies,auto-update)');
+    console.log('  --reviewers      Comma-separated GitHub usernames to request as reviewers');
+    console.log('  --commit-message Custom commit message for dependency update commit');
+    console.log('  --help           Show this help message');
+  }
 }
 
 // Export a default instance
