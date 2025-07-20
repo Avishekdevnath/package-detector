@@ -2,6 +2,9 @@ import axios from 'axios';
 import { reporter, DetectionResult } from './reporter';
 import { getAllDependencies } from './utils';
 
+// Cache for bundlephobia results to avoid repeated API calls
+const bundlephobiaCache = new Map<string, BundlephobiaResult | null>();
+
 export interface BundlephobiaResult {
   size: number;
   gzip: number;
@@ -12,7 +15,14 @@ export interface BundlephobiaResult {
 }
 
 /**
- * Detect heavy packages using Bundlephobia API
+ * Clear bundlephobia cache
+ */
+export function clearBundlephobiaCache(): void {
+  bundlephobiaCache.clear();
+}
+
+/**
+ * Detect heavy packages using Bundlephobia API (optimized with parallel calls)
  */
 export async function detectHeavyPackages(): Promise<void> {
   try {
@@ -36,56 +46,84 @@ export async function detectHeavyPackages(): Promise<void> {
     
     // Get existing unused packages to skip them
     const existingResults = reporter.getResults();
-    const unusedPackages = existingResults.filter(r => r.type === 'unused').map(r => r.packageName);
+    const unusedPackages = existingResults.filter(r => r.type === 'unused' && (!r.metadata?.category || r.metadata.category !== 'infrastructure')).map(r => r.packageName);
     
-    // Check each package
-    for (const packageName of dependencyNames) {
-      // Skip packages that are already detected as unused
-      if (unusedPackages.includes(packageName)) {
-        continue;
-      }
-      
-      try {
-        const bundleInfo = await getBundlephobiaInfo(packageName);
-        
-        if (bundleInfo) {
-          const gzipSize = bundleInfo.gzip;
-          let severity: 'low' | 'medium' | 'high' = 'low';
-          let message = '';
+    // Filter out packages to check
+    const packagesToCheck = dependencyNames.filter(pkg => !unusedPackages.includes(pkg));
+    
+    if (packagesToCheck.length === 0) {
+      reporter.printSuccess('No packages to check for size');
+      return;
+    }
+    
+    // Process packages in parallel batches to avoid overwhelming the API
+    const batchSize = 3; // Process 3 packages at a time
+    const batches = [];
+    
+    for (let i = 0; i < packagesToCheck.length; i += batchSize) {
+      batches.push(packagesToCheck.slice(i, i + batchSize));
+    }
+    
+    for (const batch of batches) {
+      // Process batch in parallel
+      const batchPromises = batch.map(async (packageName) => {
+        try {
+          reporter.printInfo(`Checking size for ${packageName}...`);
+          const bundleInfo = await getBundlephobiaInfo(packageName);
           
-          if (gzipSize > sizeThresholds.large) {
-            severity = 'high';
-            message = `Very large package: ${formatSize(gzipSize)} (gzipped)`;
-          } else if (gzipSize > sizeThresholds.medium) {
-            severity = 'medium';
-            message = `Large package: ${formatSize(gzipSize)} (gzipped)`;
-          } else if (gzipSize > sizeThresholds.small) {
-            severity = 'low';
-            message = `Medium package: ${formatSize(gzipSize)} (gzipped)`;
+          if (bundleInfo) {
+            const gzipSize = bundleInfo.gzip;
+            let severity: 'low' | 'medium' | 'high' = 'low';
+            let message = '';
+            
+            if (gzipSize > sizeThresholds.large) {
+              severity = 'high';
+              message = `Very large package: ${formatSize(gzipSize)} (gzipped)`;
+            } else if (gzipSize > sizeThresholds.medium) {
+              severity = 'medium';
+              message = `Large package: ${formatSize(gzipSize)} (gzipped)`;
+            } else if (gzipSize > sizeThresholds.small) {
+              severity = 'low';
+              message = `Medium package: ${formatSize(gzipSize)} (gzipped)`;
+            }
+            
+            if (gzipSize > sizeThresholds.small) {
+              return {
+                type: 'heavy' as const,
+                packageName,
+                message,
+                severity,
+                metadata: {
+                  size: bundleInfo.size,
+                  gzip: bundleInfo.gzip,
+                  version: bundleInfo.version,
+                  description: bundleInfo.description
+                }
+              };
+            }
           }
           
-          if (gzipSize > sizeThresholds.small) {
-            heavyPackages.push({
-              type: 'heavy',
-              packageName,
-              message,
-              severity,
-              metadata: {
-                size: bundleInfo.size,
-                gzip: bundleInfo.gzip,
-                version: bundleInfo.version,
-                description: bundleInfo.description
-              }
-            });
-          }
+          return null;
+        } catch (error) {
+          // Skip packages that can't be checked
+          console.warn(`Warning: Could not check size for ${packageName}: ${error}`);
+          return null;
         }
-        
-        // Add a small delay to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
-      } catch (error) {
-        // Skip packages that can't be checked
-        console.warn(`Warning: Could not check size for ${packageName}: ${error}`);
+      });
+      
+      // Wait for batch to complete
+      const batchResults = await Promise.all(batchPromises);
+      
+      // Add non-null results
+      batchResults.forEach(result => {
+        if (result) {
+          heavyPackages.push(result);
+        }
+      });
+      
+      // Add a small delay between batches to avoid rate limiting
+      if (batches.indexOf(batch) < batches.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 300));
       }
     }
     
@@ -103,20 +141,25 @@ export async function detectHeavyPackages(): Promise<void> {
 }
 
 /**
- * Get package information from Bundlephobia API
+ * Get package information from Bundlephobia API (with caching)
  */
 async function getBundlephobiaInfo(packageName: string): Promise<BundlephobiaResult | null> {
+  // Check cache first
+  if (bundlephobiaCache.has(packageName)) {
+    return bundlephobiaCache.get(packageName)!;
+  }
+  
   try {
     const url = `https://bundlephobia.com/api/size?package=${encodeURIComponent(packageName)}`;
     const response = await axios.get(url, {
-      timeout: 10000, // 10 second timeout
+      timeout: 5000, // 5 second timeout
       headers: {
         'User-Agent': 'package-detector/1.0.0'
       }
     });
     
     if (response.status === 200 && response.data) {
-      return {
+      const result = {
         size: response.data.size || 0,
         gzip: response.data.gzip || 0,
         dependencySizes: response.data.dependencySizes || {},
@@ -124,18 +167,29 @@ async function getBundlephobiaInfo(packageName: string): Promise<BundlephobiaRes
         version: response.data.version || 'unknown',
         description: response.data.description
       };
+      
+      // Cache the result
+      bundlephobiaCache.set(packageName, result);
+      return result;
     }
     
+    // Cache null result
+    bundlephobiaCache.set(packageName, null);
     return null;
   } catch (error) {
     if (axios.isAxiosError(error)) {
       if (error.response?.status === 404) {
         // Package not found on Bundlephobia
+        bundlephobiaCache.set(packageName, null);
         return null;
       }
       if (error.response?.status === 429) {
         // Rate limited
         throw new Error('Rate limited by Bundlephobia API');
+      }
+      if (error.code === 'ECONNABORTED') {
+        // Timeout
+        throw new Error('Request timeout');
       }
     }
     throw error;

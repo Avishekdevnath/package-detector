@@ -12,6 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.clearBundlephobiaCache = clearBundlephobiaCache;
 exports.detectHeavyPackages = detectHeavyPackages;
 exports.getHeavyPackagesInfo = getHeavyPackagesInfo;
 exports.isPackageHeavy = isPackageHeavy;
@@ -19,8 +20,16 @@ exports.getSizeRecommendations = getSizeRecommendations;
 const axios_1 = __importDefault(require("axios"));
 const reporter_1 = require("./reporter");
 const utils_1 = require("./utils");
+// Cache for bundlephobia results to avoid repeated API calls
+const bundlephobiaCache = new Map();
 /**
- * Detect heavy packages using Bundlephobia API
+ * Clear bundlephobia cache
+ */
+function clearBundlephobiaCache() {
+    bundlephobiaCache.clear();
+}
+/**
+ * Detect heavy packages using Bundlephobia API (optimized with parallel calls)
  */
 function detectHeavyPackages() {
     return __awaiter(this, void 0, void 0, function* () {
@@ -41,52 +50,75 @@ function detectHeavyPackages() {
             };
             // Get existing unused packages to skip them
             const existingResults = reporter_1.reporter.getResults();
-            const unusedPackages = existingResults.filter(r => r.type === 'unused').map(r => r.packageName);
-            // Check each package
-            for (const packageName of dependencyNames) {
-                // Skip packages that are already detected as unused
-                if (unusedPackages.includes(packageName)) {
-                    continue;
-                }
-                try {
-                    const bundleInfo = yield getBundlephobiaInfo(packageName);
-                    if (bundleInfo) {
-                        const gzipSize = bundleInfo.gzip;
-                        let severity = 'low';
-                        let message = '';
-                        if (gzipSize > sizeThresholds.large) {
-                            severity = 'high';
-                            message = `Very large package: ${formatSize(gzipSize)} (gzipped)`;
+            const unusedPackages = existingResults.filter(r => { var _a; return r.type === 'unused' && (!((_a = r.metadata) === null || _a === void 0 ? void 0 : _a.category) || r.metadata.category !== 'infrastructure'); }).map(r => r.packageName);
+            // Filter out packages to check
+            const packagesToCheck = dependencyNames.filter(pkg => !unusedPackages.includes(pkg));
+            if (packagesToCheck.length === 0) {
+                reporter_1.reporter.printSuccess('No packages to check for size');
+                return;
+            }
+            // Process packages in parallel batches to avoid overwhelming the API
+            const batchSize = 3; // Process 3 packages at a time
+            const batches = [];
+            for (let i = 0; i < packagesToCheck.length; i += batchSize) {
+                batches.push(packagesToCheck.slice(i, i + batchSize));
+            }
+            for (const batch of batches) {
+                // Process batch in parallel
+                const batchPromises = batch.map((packageName) => __awaiter(this, void 0, void 0, function* () {
+                    try {
+                        reporter_1.reporter.printInfo(`Checking size for ${packageName}...`);
+                        const bundleInfo = yield getBundlephobiaInfo(packageName);
+                        if (bundleInfo) {
+                            const gzipSize = bundleInfo.gzip;
+                            let severity = 'low';
+                            let message = '';
+                            if (gzipSize > sizeThresholds.large) {
+                                severity = 'high';
+                                message = `Very large package: ${formatSize(gzipSize)} (gzipped)`;
+                            }
+                            else if (gzipSize > sizeThresholds.medium) {
+                                severity = 'medium';
+                                message = `Large package: ${formatSize(gzipSize)} (gzipped)`;
+                            }
+                            else if (gzipSize > sizeThresholds.small) {
+                                severity = 'low';
+                                message = `Medium package: ${formatSize(gzipSize)} (gzipped)`;
+                            }
+                            if (gzipSize > sizeThresholds.small) {
+                                return {
+                                    type: 'heavy',
+                                    packageName,
+                                    message,
+                                    severity,
+                                    metadata: {
+                                        size: bundleInfo.size,
+                                        gzip: bundleInfo.gzip,
+                                        version: bundleInfo.version,
+                                        description: bundleInfo.description
+                                    }
+                                };
+                            }
                         }
-                        else if (gzipSize > sizeThresholds.medium) {
-                            severity = 'medium';
-                            message = `Large package: ${formatSize(gzipSize)} (gzipped)`;
-                        }
-                        else if (gzipSize > sizeThresholds.small) {
-                            severity = 'low';
-                            message = `Medium package: ${formatSize(gzipSize)} (gzipped)`;
-                        }
-                        if (gzipSize > sizeThresholds.small) {
-                            heavyPackages.push({
-                                type: 'heavy',
-                                packageName,
-                                message,
-                                severity,
-                                metadata: {
-                                    size: bundleInfo.size,
-                                    gzip: bundleInfo.gzip,
-                                    version: bundleInfo.version,
-                                    description: bundleInfo.description
-                                }
-                            });
-                        }
+                        return null;
                     }
-                    // Add a small delay to avoid rate limiting
-                    yield new Promise(resolve => setTimeout(resolve, 100));
-                }
-                catch (error) {
-                    // Skip packages that can't be checked
-                    console.warn(`Warning: Could not check size for ${packageName}: ${error}`);
+                    catch (error) {
+                        // Skip packages that can't be checked
+                        console.warn(`Warning: Could not check size for ${packageName}: ${error}`);
+                        return null;
+                    }
+                }));
+                // Wait for batch to complete
+                const batchResults = yield Promise.all(batchPromises);
+                // Add non-null results
+                batchResults.forEach(result => {
+                    if (result) {
+                        heavyPackages.push(result);
+                    }
+                });
+                // Add a small delay between batches to avoid rate limiting
+                if (batches.indexOf(batch) < batches.length - 1) {
+                    yield new Promise(resolve => setTimeout(resolve, 300));
                 }
             }
             // Add results to reporter
@@ -104,21 +136,25 @@ function detectHeavyPackages() {
     });
 }
 /**
- * Get package information from Bundlephobia API
+ * Get package information from Bundlephobia API (with caching)
  */
 function getBundlephobiaInfo(packageName) {
     return __awaiter(this, void 0, void 0, function* () {
         var _a, _b;
+        // Check cache first
+        if (bundlephobiaCache.has(packageName)) {
+            return bundlephobiaCache.get(packageName);
+        }
         try {
             const url = `https://bundlephobia.com/api/size?package=${encodeURIComponent(packageName)}`;
             const response = yield axios_1.default.get(url, {
-                timeout: 10000, // 10 second timeout
+                timeout: 5000, // 5 second timeout
                 headers: {
                     'User-Agent': 'package-detector/1.0.0'
                 }
             });
             if (response.status === 200 && response.data) {
-                return {
+                const result = {
                     size: response.data.size || 0,
                     gzip: response.data.gzip || 0,
                     dependencySizes: response.data.dependencySizes || {},
@@ -126,18 +162,28 @@ function getBundlephobiaInfo(packageName) {
                     version: response.data.version || 'unknown',
                     description: response.data.description
                 };
+                // Cache the result
+                bundlephobiaCache.set(packageName, result);
+                return result;
             }
+            // Cache null result
+            bundlephobiaCache.set(packageName, null);
             return null;
         }
         catch (error) {
             if (axios_1.default.isAxiosError(error)) {
                 if (((_a = error.response) === null || _a === void 0 ? void 0 : _a.status) === 404) {
                     // Package not found on Bundlephobia
+                    bundlephobiaCache.set(packageName, null);
                     return null;
                 }
                 if (((_b = error.response) === null || _b === void 0 ? void 0 : _b.status) === 429) {
                     // Rate limited
                     throw new Error('Rate limited by Bundlephobia API');
+                }
+                if (error.code === 'ECONNABORTED') {
+                    // Timeout
+                    throw new Error('Request timeout');
                 }
             }
             throw error;

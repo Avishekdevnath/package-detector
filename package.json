@@ -34,13 +34,10 @@
   "author": "Avishek Devnath",
   "license": "MIT",
   "dependencies": {
-    "@types/node": "^24.0.15",
     "axios": "^1.10.0",
     "chalk": "^4.1.2",
-    "npm-which": "^3.0.1",
     "ts-node": "^10.9.2",
-    "typescript": "^5.8.3",
-    "webpack": "^5.100.2"
+    "typescript": "^5.8.3"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",

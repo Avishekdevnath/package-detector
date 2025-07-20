@@ -2,6 +2,11 @@ import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
 import { join, extname } from 'path';
 import { execSync } from 'child_process';
 
+// Performance optimization: Cache for file content and imports
+const fileContentCache = new Map<string, string>();
+const importCache = new Map<string, string[]>();
+const packageUsageCache = new Map<string, boolean>();
+
 export interface PackageJson {
   name: string;
   version: string;
@@ -29,6 +34,15 @@ export interface BundlephobiaResult {
   size: number;
   gzip: number;
   dependencySizes: Record<string, number>;
+}
+
+/**
+ * Clear all caches (useful for testing or memory management)
+ */
+export function clearCaches(): void {
+  fileContentCache.clear();
+  importCache.clear();
+  packageUsageCache.clear();
 }
 
 /**
@@ -66,34 +80,44 @@ export function getAllDependencies(): Record<string, string> {
 }
 
 /**
- * Find all project files that might contain imports
+ * Find all project files that might contain imports (optimized)
  */
 export function findProjectFiles(
   dir: string = process.cwd(),
   extensions: string[] = ['.js', '.jsx', '.ts', '.tsx', '.vue', '.svelte'],
-  excludeDirs: string[] = ['node_modules', '.git', 'dist', 'build', 'coverage']
+  excludeDirs: string[] = ['node_modules', '.git', 'dist', 'build', 'coverage', '.next', '.nuxt', '.cache']
 ): string[] {
   const files: string[] = [];
+  const excludeSet = new Set(excludeDirs); // Use Set for O(1) lookup
   
-  function scanDirectory(currentDir: string): void {
+  function scanDirectory(currentDir: string, depth: number = 0): void {
+    // Limit recursion depth to prevent stack overflow on deep directories
+    if (depth > 20) return;
+    
     try {
       const items = readdirSync(currentDir);
       
       for (const item of items) {
         const fullPath = join(currentDir, item);
-        const stat = statSync(fullPath);
         
-        if (stat.isDirectory()) {
-          // Skip excluded directories
-          if (!excludeDirs.includes(item)) {
-            scanDirectory(fullPath);
+        try {
+          const stat = statSync(fullPath);
+          
+          if (stat.isDirectory()) {
+            // Skip excluded directories
+            if (!excludeSet.has(item)) {
+              scanDirectory(fullPath, depth + 1);
+            }
+          } else if (stat.isFile()) {
+            // Check if file has a relevant extension
+            const ext = extname(item).toLowerCase();
+            if (extensions.includes(ext)) {
+              files.push(fullPath);
+            }
           }
-        } else if (stat.isFile()) {
-          // Check if file has a relevant extension
-          const ext = extname(item).toLowerCase();
-          if (extensions.includes(ext)) {
-            files.push(fullPath);
-          }
+        } catch (error) {
+          // Skip files/directories we can't access
+          continue;
         }
       }
     } catch (error) {
@@ -107,34 +131,39 @@ export function findProjectFiles(
 }
 
 /**
- * Extract import/require statements from a file
+ * Extract import/require statements from a file (optimized with caching)
  */
 export function extractImports(filePath: string): string[] {
+  // Check cache first
+  if (importCache.has(filePath)) {
+    return importCache.get(filePath)!;
+  }
+  
   try {
     const content = readFileSync(filePath, 'utf8');
     const imports: string[] = [];
     
-    // Match ES6 imports: import x from 'y', import {x} from 'y', import * as x from 'y'
-    const es6Imports = content.match(/import\s+(?:(?:\{[^}]*\}|\*\s+as\s+\w+|\w+)\s+from\s+)?['"`]([^'"`]+)['"`]/g);
-    if (es6Imports) {
-      es6Imports.forEach(imp => {
-        const match = imp.match(/['"`]([^'"`]+)['"`]/);
-        if (match) imports.push(match[1]);
-      });
+    // Optimized regex patterns - compile once and reuse
+    const es6ImportPattern = /import\s+(?:(?:\{[^}]*\}|\*\s+as\s+\w+|\w+)\s+from\s+)?['"`]([^'"`]+)['"`]/g;
+    const commonjsPattern = /require\s*\(\s*['"`]([^'"`]+)['"`]\s*\)/g;
+    
+    // Match ES6 imports
+    let match;
+    while ((match = es6ImportPattern.exec(content)) !== null) {
+      imports.push(match[1]);
     }
     
-    // Match CommonJS requires: require('x'), require("x")
-    const commonjsImports = content.match(/require\s*\(\s*['"`]([^'"`]+)['"`]\s*\)/g);
-    if (commonjsImports) {
-      commonjsImports.forEach(imp => {
-        const match = imp.match(/['"`]([^'"`]+)['"`]/);
-        if (match) imports.push(match[1]);
-      });
+    // Match CommonJS requires
+    while ((match = commonjsPattern.exec(content)) !== null) {
+      imports.push(match[1]);
     }
     
+    // Cache the result
+    importCache.set(filePath, imports);
     return imports;
   } catch (error) {
     console.warn(`Warning: Could not read file ${filePath}: ${error}`);
+    importCache.set(filePath, []); // Cache empty result
     return [];
   }
 }
@@ -198,8 +227,9 @@ export function parseNpmLs(output: string): NpmLsResult[] {
   const results: NpmLsResult[] = [];
   
   // Look for lines with package names and versions
+  // Match any line that contains a package name followed by @ and version
   for (const line of lines) {
-    const match = line.match(/^[├└]─\s+([^@]+)@([^\s]+)/);
+    const match = line.match(/([^@\s]+)@([^\s]+)/);
     if (match) {
       results.push({
         name: match[1],
@@ -212,25 +242,96 @@ export function parseNpmLs(output: string): NpmLsResult[] {
 }
 
 /**
- * Check if a package is used in the project
+ * Check if a package is used in the project (optimized with caching and early termination)
  */
 export function isPackageUsed(packageName: string, projectFiles: string[]): boolean {
+  // Check cache first
+  const cacheKey = `${packageName}:${projectFiles.length}`;
+  if (packageUsageCache.has(cacheKey)) {
+    return packageUsageCache.get(cacheKey)!;
+  }
+  
+  // Pre-compile regex patterns for better performance
+  const exactMatchPattern = new RegExp(`^${packageName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`);
+  const prefixPattern = new RegExp(`^${packageName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/`);
+  const scopedPattern = packageName.startsWith('@') ? new RegExp(`^${packageName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`) : null;
+  
   for (const file of projectFiles) {
     const imports = extractImports(file);
     
     for (const imp of imports) {
       // Check exact match
-      if (imp === packageName) return true;
+      if (exactMatchPattern.test(imp)) {
+        packageUsageCache.set(cacheKey, true);
+        return true;
+      }
       
       // Check if package is a prefix (for sub-modules)
-      if (imp.startsWith(packageName + '/')) return true;
+      if (prefixPattern.test(imp)) {
+        packageUsageCache.set(cacheKey, true);
+        return true;
+      }
       
       // Check scoped packages
-      if (packageName.startsWith('@') && imp.startsWith(packageName)) return true;
+      if (scopedPattern && scopedPattern.test(imp)) {
+        packageUsageCache.set(cacheKey, true);
+        return true;
+      }
     }
   }
   
+  packageUsageCache.set(cacheKey, false);
   return false;
+}
+
+/**
+ * Batch check multiple packages for usage (optimized)
+ */
+export function batchCheckPackageUsage(packageNames: string[], projectFiles: string[]): Record<string, boolean> {
+  const results: Record<string, boolean> = {};
+  
+  // Pre-extract all imports from all files once
+  const allImports = new Set<string>();
+  for (const file of projectFiles) {
+    const imports = extractImports(file);
+    imports.forEach(imp => allImports.add(imp));
+  }
+  
+  // Check each package against the pre-extracted imports
+  for (const packageName of packageNames) {
+    const cacheKey = `${packageName}:${projectFiles.length}`;
+    
+    if (packageUsageCache.has(cacheKey)) {
+      results[packageName] = packageUsageCache.get(cacheKey)!;
+      continue;
+    }
+    
+    let isUsed = false;
+    
+    // Check exact match
+    if (allImports.has(packageName)) {
+      isUsed = true;
+    } else {
+      // Check prefix matches
+      for (const imp of allImports) {
+        if (imp.startsWith(packageName + '/')) {
+          isUsed = true;
+          break;
+        }
+        
+        // Check scoped packages
+        if (packageName.startsWith('@') && imp.startsWith(packageName)) {
+          isUsed = true;
+          break;
+        }
+      }
+    }
+    
+    results[packageName] = isUsed;
+    packageUsageCache.set(cacheKey, isUsed);
+  }
+  
+  return results;
 }
 
 /**

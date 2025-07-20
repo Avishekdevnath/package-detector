@@ -1,15 +1,15 @@
 import { detectUnusedPackages } from '../src/analyzer';
 import { reporter } from '../src/reporter';
-import { getAllDependencies, findProjectFiles, isPackageUsed } from '../src/utils';
+import { getAllDependencies, findProjectFiles, isPackageUsed, batchCheckPackageUsage } from '../src/utils';
 
-// Mock dependencies
+// Mock the modules
 jest.mock('../src/reporter');
 jest.mock('../src/utils');
 
 const mockReporter = reporter as jest.Mocked<typeof reporter>;
 const mockGetAllDependencies = getAllDependencies as jest.MockedFunction<typeof getAllDependencies>;
 const mockFindProjectFiles = findProjectFiles as jest.MockedFunction<typeof findProjectFiles>;
-const mockIsPackageUsed = isPackageUsed as jest.MockedFunction<typeof isPackageUsed>;
+const mockBatchCheckPackageUsage = batchCheckPackageUsage as jest.MockedFunction<typeof batchCheckPackageUsage>;
 
 describe('Analyzer - Unused Package Detection', () => {
   beforeEach(() => {
@@ -36,17 +36,18 @@ describe('Analyzer - Unused Package Detection', () => {
     // Mock package usage
     mockGetAllDependencies.mockReturnValue(mockDependencies);
     mockFindProjectFiles.mockReturnValue(mockFiles);
-    mockIsPackageUsed
-      .mockReturnValueOnce(true)  // used-package
-      .mockReturnValueOnce(false) // unused-package
-      .mockReturnValueOnce(false) // another-unused
-      .mockReturnValueOnce(false); // dev-unused
+    mockBatchCheckPackageUsage.mockReturnValue({
+      'used-package': true,
+      'unused-package': false,
+      'another-unused': false,
+      'dev-unused': false
+    });
 
     await detectUnusedPackages();
 
     expect(mockReporter.printInfo).toHaveBeenCalledWith('Scanning project files for imports...');
     expect(mockReporter.printInfo).toHaveBeenCalledWith('Found 2 project files to analyze');
-    expect(mockReporter.printInfo).toHaveBeenCalledWith('Found 3 unused packages');
+    expect(mockReporter.printInfo).toHaveBeenCalledWith('Found 3 truly unused packages');
 
     expect(mockReporter.addResults).toHaveBeenCalledWith([
       {
@@ -79,11 +80,13 @@ describe('Analyzer - Unused Package Detection', () => {
 
     mockGetAllDependencies.mockReturnValue(mockDependencies);
     mockFindProjectFiles.mockReturnValue(mockFiles);
-    mockIsPackageUsed.mockReturnValue(true); // All packages are used
+    mockBatchCheckPackageUsage.mockReturnValue({
+      'used-package': true
+    });
 
     await detectUnusedPackages();
 
-    expect(mockReporter.printSuccess).toHaveBeenCalledWith('All packages are being used');
+    expect(mockReporter.printSuccess).toHaveBeenCalledWith('✅ No unused packages found! All dependencies are being used.');
     expect(mockReporter.addResults).not.toHaveBeenCalled();
   });
 
@@ -104,11 +107,22 @@ describe('Analyzer - Unused Package Detection', () => {
 
     mockGetAllDependencies.mockReturnValue(mockDependencies);
     mockFindProjectFiles.mockReturnValue([]);
+    mockBatchCheckPackageUsage.mockReturnValue({
+      'some-package': false
+    });
 
     await detectUnusedPackages();
 
     expect(mockReporter.printInfo).toHaveBeenCalledWith('Found 0 project files to analyze');
-    expect(mockReporter.printSuccess).toHaveBeenCalledWith('All packages are being used');
+    expect(mockReporter.printInfo).toHaveBeenCalledWith('Found 1 truly unused packages');
+    expect(mockReporter.addResults).toHaveBeenCalledWith([
+      {
+        type: 'unused',
+        packageName: 'some-package',
+        message: 'Not imported anywhere in the project',
+        severity: 'medium'
+      }
+    ]);
   });
 
   it('should handle scoped packages correctly', async () => {
@@ -121,9 +135,10 @@ describe('Analyzer - Unused Package Detection', () => {
 
     mockGetAllDependencies.mockReturnValue(mockDependencies);
     mockFindProjectFiles.mockReturnValue(mockFiles);
-    mockIsPackageUsed
-      .mockReturnValueOnce(true)  // @scope/used-package
-      .mockReturnValueOnce(false); // @scope/unused-package
+    mockBatchCheckPackageUsage.mockReturnValue({
+      '@scope/used-package': true,
+      '@scope/unused-package': false
+    });
 
     await detectUnusedPackages();
 
@@ -153,15 +168,16 @@ describe('Analyzer - Unused Package Detection', () => {
 
     mockGetAllDependencies.mockReturnValue(mockDependencies);
     mockFindProjectFiles.mockReturnValue(mockFiles);
-    mockIsPackageUsed
-      .mockReturnValueOnce(true)   // prod-used
-      .mockReturnValueOnce(false)  // prod-unused
-      .mockReturnValueOnce(true)   // dev-used
-      .mockReturnValueOnce(false)  // dev-unused
-      .mockReturnValueOnce(true)   // peer-used
-      .mockReturnValueOnce(false)  // peer-unused
-      .mockReturnValueOnce(true)   // opt-used
-      .mockReturnValueOnce(false); // opt-unused
+    mockBatchCheckPackageUsage.mockReturnValue({
+      'prod-used': true,
+      'prod-unused': false,
+      'dev-used': true,
+      'dev-unused': false,
+      'peer-used': true,
+      'peer-unused': false,
+      'opt-used': true,
+      'opt-unused': false
+    });
 
     await detectUnusedPackages();
 

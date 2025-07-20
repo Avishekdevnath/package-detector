@@ -22,7 +22,7 @@ class Reporter {
         return [...this.results];
     }
     printHeader() {
-        console.log(chalk_1.default.bold.blue('\n🔍 Package Detector Analysis Report'));
+        console.log(chalk_1.default.blue('\n🔍 Package Detector Analysis Report'));
         console.log(chalk_1.default.gray('='.repeat(50)));
     }
     printResults() {
@@ -34,30 +34,40 @@ class Reporter {
         const outdated = this.results.filter(r => r.type === 'outdated');
         const duplicates = this.results.filter(r => r.type === 'duplicate');
         const heavy = this.results.filter(r => r.type === 'heavy');
-        // Print unused packages
-        if (unused.length > 0) {
-            console.log(chalk_1.default.red.bold('\n❌ Unused Packages:'));
-            unused.forEach(result => {
+        // Separate truly unused packages from infrastructure packages
+        const trulyUnused = unused.filter(r => { var _a; return !((_a = r.metadata) === null || _a === void 0 ? void 0 : _a.category) || r.metadata.category !== 'infrastructure'; });
+        const infrastructure = unused.filter(r => { var _a; return ((_a = r.metadata) === null || _a === void 0 ? void 0 : _a.category) === 'infrastructure'; });
+        // Print truly unused packages
+        if (trulyUnused.length > 0) {
+            console.log(chalk_1.default.red('\n❌ Truly Unused Packages:'));
+            trulyUnused.forEach(result => {
                 console.log(chalk_1.default.red(`  • ${result.packageName} - ${result.message}`));
+            });
+        }
+        // Print infrastructure packages (always show if they exist)
+        if (infrastructure.length > 0) {
+            console.log(chalk_1.default.cyan('\n🔧 Infrastructure Packages (needed for project but not imported):'));
+            infrastructure.forEach(result => {
+                console.log(chalk_1.default.cyan(`  • ${result.packageName} - ${result.message}`));
             });
         }
         // Print outdated packages
         if (outdated.length > 0) {
-            console.log(chalk_1.default.yellow.bold('\n⚠️  Outdated Packages:'));
+            console.log(chalk_1.default.yellow('\n⚠️  Outdated Packages:'));
             outdated.forEach(result => {
                 console.log(chalk_1.default.yellow(`  • ${result.packageName} - ${result.message}`));
             });
         }
         // Print duplicate packages
         if (duplicates.length > 0) {
-            console.log(chalk_1.default.blue.bold('\n💡 Duplicate Packages:'));
+            console.log(chalk_1.default.blue('\n💡 Duplicate Packages:'));
             duplicates.forEach(result => {
                 console.log(chalk_1.default.blue(`  • ${result.packageName} - ${result.message}`));
             });
         }
         // Print heavy packages
         if (heavy.length > 0) {
-            console.log(chalk_1.default.magenta.bold('\n🏋️  Heavy Packages:'));
+            console.log(chalk_1.default.magenta('\n🏋️  Heavy Packages:'));
             heavy.forEach(result => {
                 console.log(chalk_1.default.magenta(`  • ${result.packageName} - ${result.message}`));
             });
@@ -67,14 +77,20 @@ class Reporter {
     printSummary() {
         const total = this.results.length;
         const unused = this.results.filter(r => r.type === 'unused').length;
+        const trulyUnused = this.results.filter(r => { var _a; return r.type === 'unused' && (!((_a = r.metadata) === null || _a === void 0 ? void 0 : _a.category) || r.metadata.category !== 'infrastructure'); }).length;
+        const infrastructure = this.results.filter(r => { var _a; return r.type === 'unused' && ((_a = r.metadata) === null || _a === void 0 ? void 0 : _a.category) === 'infrastructure'; }).length;
         const outdated = this.results.filter(r => r.type === 'outdated').length;
         const duplicates = this.results.filter(r => r.type === 'duplicate').length;
         const heavy = this.results.filter(r => r.type === 'heavy').length;
         console.log(chalk_1.default.gray('\n' + '='.repeat(50)));
-        console.log(chalk_1.default.bold('📊 Summary:'));
+        console.log(chalk_1.default.cyan('📊 Summary:'));
         console.log(chalk_1.default.gray(`  Total issues found: ${total}`));
-        if (unused > 0)
-            console.log(chalk_1.default.red(`  Unused packages: ${unused}`));
+        // Only show unused packages if we have any unused results
+        if (unused > 0) {
+            console.log(chalk_1.default.red(`  Truly unused packages: ${trulyUnused}`));
+            if (infrastructure > 0)
+                console.log(chalk_1.default.cyan(`  Infrastructure packages: ${infrastructure}`));
+        }
         if (outdated > 0)
             console.log(chalk_1.default.yellow(`  Outdated packages: ${outdated}`));
         if (duplicates > 0)
@@ -83,19 +99,19 @@ class Reporter {
             console.log(chalk_1.default.magenta(`  Heavy packages: ${heavy}`));
     }
     printError(message) {
-        console.log(chalk_1.default.red.bold(`❌ Error: ${message}`));
+        console.log(chalk_1.default.red(`❌ Error: ${message}`));
     }
     printWarning(message) {
-        console.log(chalk_1.default.yellow.bold(`⚠️  Warning: ${message}`));
+        console.log(chalk_1.default.yellow(`⚠️  Warning: ${message}`));
     }
     printInfo(message) {
-        console.log(chalk_1.default.blue.bold(`ℹ️  Info: ${message}`));
+        console.log(chalk_1.default.blue(`ℹ️  Info: ${message}`));
     }
     printSuccess(message) {
-        console.log(chalk_1.default.green.bold(`✅ ${message}`));
+        console.log(chalk_1.default.green(`✅ ${message}`));
     }
     printHelp() {
-        console.log(chalk_1.default.cyan.bold('\n📖 Package Detector Usage:'));
+        console.log(chalk_1.default.cyan('\n📖 Package Detector Usage:'));
         console.log(chalk_1.default.gray('  npx package-detector [options]'));
         console.log(chalk_1.default.gray('\nOptions:'));
         console.log(chalk_1.default.gray('  --unused      Detect unused packages'));

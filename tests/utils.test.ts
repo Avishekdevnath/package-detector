@@ -8,7 +8,9 @@ import {
   parseNpmLs, 
   isPackageUsed, 
   getPackageNameWithoutScope, 
-  isScopedPackage 
+  isScopedPackage,
+  clearCaches,
+  batchCheckPackageUsage
 } from '../src/utils';
 import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
 import { execSync } from 'child_process';
@@ -25,6 +27,7 @@ const mockExecSync = execSync as jest.MockedFunction<typeof execSync>;
 
 describe('Utils', () => {
   beforeEach(() => {
+    clearCaches();
     jest.clearAllMocks();
   });
 
@@ -102,61 +105,66 @@ describe('Utils', () => {
   });
 
   describe('findProjectFiles', () => {
-    beforeEach(() => {
-      // Reset mocks before each test
-      jest.clearAllMocks();
-    });
-
     it('should find files with specified extensions', () => {
-      const mockItems = [
-        { name: 'file1.js', isDirectory: () => false },
-        { name: 'file2.ts', isDirectory: () => false },
-        { name: 'file3.txt', isDirectory: () => false },
-        { name: 'node_modules', isDirectory: () => true },
-        { name: 'subdir', isDirectory: () => true }
-      ];
-
-      // Mock the file system operations
+      const mockItems = ['file1.js', 'file2.ts', 'file3.txt', 'node_modules', 'subdir'];
+      
       mockReaddirSync.mockReturnValue(mockItems as any);
       mockStatSync.mockImplementation((path: any) => {
         const name = String(path).split('/').pop() || String(path).split('\\').pop();
-        const item = mockItems.find(item => item.name === name);
+        const isDir = name === 'node_modules' || name === 'subdir';
         return {
-          isDirectory: () => item?.isDirectory() || false,
-          isFile: () => !item?.isDirectory()
+          isDirectory: () => isDir,
+          isFile: () => !isDir
         } as any;
       });
 
       const result = findProjectFiles();
 
-      expect(result).toContain('file1.js');
-      expect(result).toContain('file2.ts');
-      expect(result).not.toContain('file3.txt');
-      expect(result).not.toContain('node_modules');
+      expect(result.some(path => path.includes('file1.js'))).toBe(true);
+      expect(result.some(path => path.includes('file2.ts'))).toBe(true);
+      expect(result.some(path => path.includes('file3.txt'))).toBe(false);
+      expect(result.some(path => path.includes('node_modules'))).toBe(false);
     });
 
     it('should exclude specified directories', () => {
-      const mockItems = [
-        { name: 'src', isDirectory: () => true },
-        { name: 'node_modules', isDirectory: () => true },
-        { name: '.git', isDirectory: () => true }
-      ];
-
+      const mockItems = ['src', 'node_modules', '.git'];
+      
       mockReaddirSync.mockReturnValue(mockItems as any);
       mockStatSync.mockImplementation((path: any) => {
         const name = String(path).split('/').pop() || String(path).split('\\').pop();
-        const item = mockItems.find(item => item.name === name);
+        const isDir = name === 'src' || name === 'node_modules' || name === '.git';
         return {
-          isDirectory: () => item?.isDirectory() || false,
-          isFile: () => !item?.isDirectory()
+          isDirectory: () => isDir,
+          isFile: () => !isDir
         } as any;
       });
 
       const result = findProjectFiles();
 
-      expect(result).toContain('src');
-      expect(result).not.toContain('node_modules');
-      expect(result).not.toContain('.git');
+      // Since src is a directory, it should be included in the scan
+      // but since it's empty (no files), the result should be empty
+      expect(result).toEqual([]);
+      expect(result.some(path => path.includes('node_modules'))).toBe(false);
+      expect(result.some(path => path.includes('.git'))).toBe(false);
+    });
+
+    it('should handle directory with files', () => {
+      const mockItems = ['src', 'file1.js', 'file2.ts'];
+      
+      mockReaddirSync.mockReturnValue(mockItems as any);
+      mockStatSync.mockImplementation((path: any) => {
+        const name = String(path).split('/').pop() || String(path).split('\\').pop();
+        const isDir = name === 'src';
+        return {
+          isDirectory: () => isDir,
+          isFile: () => !isDir
+        } as any;
+      });
+
+      const result = findProjectFiles();
+
+      expect(result.some(path => path.includes('file1.js'))).toBe(true);
+      expect(result.some(path => path.includes('file2.ts'))).toBe(true);
     });
   });
 
@@ -195,6 +203,10 @@ describe('Utils', () => {
     });
 
     it('should handle file read errors gracefully', () => {
+      // Suppress console warnings for this test
+      const originalWarn = console.warn;
+      console.warn = jest.fn();
+      
       mockReadFileSync.mockImplementation(() => {
         throw new Error('File not found');
       });
@@ -202,6 +214,9 @@ describe('Utils', () => {
       const result = extractImports('nonexistent.ts');
 
       expect(result).toEqual([]);
+      
+      // Restore console.warn
+      console.warn = originalWarn;
     });
   });
 
@@ -306,6 +321,26 @@ Not a package line
       const result = parseNpmLs(output);
       expect(result).toEqual([]);
     });
+
+    it('should test simple regex pattern', () => {
+      const line = '├── package1@1.0.0';
+      const match = line.match(/([^@\s]+)@([^\s]+)/);
+      expect(match).toBeTruthy();
+      if (match) {
+        expect(match[1]).toBe('package1');
+        expect(match[2]).toBe('1.0.0');
+      }
+    });
+
+    it('should test with ASCII characters', () => {
+      const line = '|-- package1@1.0.0';
+      const match = line.match(/^[|]--\s+([^@]+)@([^\s]+)/);
+      expect(match).toBeTruthy();
+      if (match) {
+        expect(match[1]).toBe('package1');
+        expect(match[2]).toBe('1.0.0');
+      }
+    });
   });
 
   describe('isPackageUsed', () => {
@@ -351,6 +386,23 @@ Not a package line
       const result = isPackageUsed('unused-package', projectFiles);
 
       expect(result).toBe(false);
+    });
+
+    it('should use caching for repeated calls', () => {
+      const projectFiles = ['test.js'];
+      const content = "import React from 'react';";
+      
+      mockReadFileSync.mockReturnValue(content);
+
+      // First call should read file
+      const result1 = isPackageUsed('react', projectFiles);
+      expect(result1).toBe(true);
+      expect(mockReadFileSync).toHaveBeenCalledTimes(1);
+
+      // Second call should use cache
+      const result2 = isPackageUsed('react', projectFiles);
+      expect(result2).toBe(true);
+      expect(mockReadFileSync).toHaveBeenCalledTimes(1); // Still 1, not 2
     });
   });
 

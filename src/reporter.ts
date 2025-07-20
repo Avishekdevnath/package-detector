@@ -28,7 +28,7 @@ export class Reporter {
   }
 
   printHeader(): void {
-    console.log(chalk.bold.blue('\n🔍 Package Detector Analysis Report'));
+    console.log(chalk.blue('\n🔍 Package Detector Analysis Report'));
     console.log(chalk.gray('='.repeat(50)));
   }
 
@@ -43,17 +43,29 @@ export class Reporter {
     const duplicates = this.results.filter(r => r.type === 'duplicate');
     const heavy = this.results.filter(r => r.type === 'heavy');
 
-    // Print unused packages
-    if (unused.length > 0) {
-      console.log(chalk.red.bold('\n❌ Unused Packages:'));
-      unused.forEach(result => {
+    // Separate truly unused packages from infrastructure packages
+    const trulyUnused = unused.filter(r => !r.metadata?.category || r.metadata.category !== 'infrastructure');
+    const infrastructure = unused.filter(r => r.metadata?.category === 'infrastructure');
+
+    // Print truly unused packages
+    if (trulyUnused.length > 0) {
+      console.log(chalk.red('\n❌ Truly Unused Packages:'));
+      trulyUnused.forEach(result => {
         console.log(chalk.red(`  • ${result.packageName} - ${result.message}`));
+      });
+    }
+
+    // Print infrastructure packages (always show if they exist)
+    if (infrastructure.length > 0) {
+      console.log(chalk.cyan('\n🔧 Infrastructure Packages (needed for project but not imported):'));
+      infrastructure.forEach(result => {
+        console.log(chalk.cyan(`  • ${result.packageName} - ${result.message}`));
       });
     }
 
     // Print outdated packages
     if (outdated.length > 0) {
-      console.log(chalk.yellow.bold('\n⚠️  Outdated Packages:'));
+      console.log(chalk.yellow('\n⚠️  Outdated Packages:'));
       outdated.forEach(result => {
         console.log(chalk.yellow(`  • ${result.packageName} - ${result.message}`));
       });
@@ -61,7 +73,7 @@ export class Reporter {
 
     // Print duplicate packages
     if (duplicates.length > 0) {
-      console.log(chalk.blue.bold('\n💡 Duplicate Packages:'));
+      console.log(chalk.blue('\n💡 Duplicate Packages:'));
       duplicates.forEach(result => {
         console.log(chalk.blue(`  • ${result.packageName} - ${result.message}`));
       });
@@ -69,7 +81,7 @@ export class Reporter {
 
     // Print heavy packages
     if (heavy.length > 0) {
-      console.log(chalk.magenta.bold('\n🏋️  Heavy Packages:'));
+      console.log(chalk.magenta('\n🏋️  Heavy Packages:'));
       heavy.forEach(result => {
         console.log(chalk.magenta(`  • ${result.packageName} - ${result.message}`));
       });
@@ -81,37 +93,45 @@ export class Reporter {
   private printSummary(): void {
     const total = this.results.length;
     const unused = this.results.filter(r => r.type === 'unused').length;
+    const trulyUnused = this.results.filter(r => r.type === 'unused' && (!r.metadata?.category || r.metadata.category !== 'infrastructure')).length;
+    const infrastructure = this.results.filter(r => r.type === 'unused' && r.metadata?.category === 'infrastructure').length;
     const outdated = this.results.filter(r => r.type === 'outdated').length;
     const duplicates = this.results.filter(r => r.type === 'duplicate').length;
     const heavy = this.results.filter(r => r.type === 'heavy').length;
 
     console.log(chalk.gray('\n' + '='.repeat(50)));
-    console.log(chalk.bold('📊 Summary:'));
+    console.log(chalk.cyan('📊 Summary:'));
     console.log(chalk.gray(`  Total issues found: ${total}`));
-    if (unused > 0) console.log(chalk.red(`  Unused packages: ${unused}`));
+    
+    // Only show unused packages if we have any unused results
+    if (unused > 0) {
+      console.log(chalk.red(`  Truly unused packages: ${trulyUnused}`));
+      if (infrastructure > 0) console.log(chalk.cyan(`  Infrastructure packages: ${infrastructure}`));
+    }
+    
     if (outdated > 0) console.log(chalk.yellow(`  Outdated packages: ${outdated}`));
     if (duplicates > 0) console.log(chalk.blue(`  Duplicate packages: ${duplicates}`));
     if (heavy > 0) console.log(chalk.magenta(`  Heavy packages: ${heavy}`));
   }
 
   printError(message: string): void {
-    console.log(chalk.red.bold(`❌ Error: ${message}`));
+    console.log(chalk.red(`❌ Error: ${message}`));
   }
 
   printWarning(message: string): void {
-    console.log(chalk.yellow.bold(`⚠️  Warning: ${message}`));
+    console.log(chalk.yellow(`⚠️  Warning: ${message}`));
   }
 
   printInfo(message: string): void {
-    console.log(chalk.blue.bold(`ℹ️  Info: ${message}`));
+    console.log(chalk.blue(`ℹ️  Info: ${message}`));
   }
 
   printSuccess(message: string): void {
-    console.log(chalk.green.bold(`✅ ${message}`));
+    console.log(chalk.green(`✅ ${message}`));
   }
 
   printHelp(): void {
-    console.log(chalk.cyan.bold('\n📖 Package Detector Usage:'));
+    console.log(chalk.cyan('\n📖 Package Detector Usage:'));
     console.log(chalk.gray('  npx package-detector [options]'));
     console.log(chalk.gray('\nOptions:'));
     console.log(chalk.gray('  --unused      Detect unused packages'));

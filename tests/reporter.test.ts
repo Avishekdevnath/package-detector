@@ -1,42 +1,14 @@
 import { Reporter, DetectionResult } from '../src/reporter';
 
-// Mock chalk directly in this test file
 jest.mock('chalk', () => {
-  // Create a proper chalk mock that supports chaining
-  const createChalkMock = () => {
-    const mockFn = jest.fn((text: string) => text) as any;
-    mockFn.bold = jest.fn((text: string) => text);
-    return mockFn;
-  };
-
-  const mockChalk = {
-    red: createChalkMock(),
-    green: createChalkMock(),
-    blue: createChalkMock(),
-    yellow: createChalkMock(),
-    magenta: createChalkMock(),
-    cyan: createChalkMock(),
-    gray: createChalkMock(),
-    bold: {
-      red: jest.fn((text: string) => text),
-      green: jest.fn((text: string) => text),
-      blue: jest.fn((text: string) => text),
-      yellow: jest.fn((text: string) => text),
-      magenta: jest.fn((text: string) => text),
-      cyan: jest.fn((text: string) => text),
-    }
-  };
-
-  // Support all chaining patterns
-  mockChalk.red.bold = jest.fn((text: string) => text);
-  mockChalk.green.bold = jest.fn((text: string) => text);
-  mockChalk.blue.bold = jest.fn((text: string) => text);
-  mockChalk.yellow.bold = jest.fn((text: string) => text);
-  mockChalk.magenta.bold = jest.fn((text: string) => text);
-  mockChalk.cyan.bold = jest.fn((text: string) => text);
-
   return {
-    default: mockChalk
+    red: jest.fn((text: string) => text),
+    green: jest.fn((text: string) => text),
+    blue: jest.fn((text: string) => text),
+    yellow: jest.fn((text: string) => text),
+    magenta: jest.fn((text: string) => text),
+    cyan: jest.fn((text: string) => text),
+    gray: jest.fn((text: string) => text)
   };
 });
 
@@ -45,6 +17,7 @@ describe('Reporter', () => {
 
   beforeEach(() => {
     reporter = new Reporter();
+    jest.clearAllMocks();
   });
 
   describe('Result Management', () => {
@@ -132,13 +105,13 @@ describe('Reporter', () => {
 
     it('should print header', () => {
       reporter.printHeader();
-      expect(console.log).toHaveBeenCalledWith('🔍 Package Detector Analysis Report');
+      expect(console.log).toHaveBeenCalledWith('\n🔍 Package Detector Analysis Report');
       expect(console.log).toHaveBeenCalledWith('='.repeat(50));
     });
 
     it('should print help', () => {
       reporter.printHelp();
-      expect(console.log).toHaveBeenCalledWith('📖 Package Detector Usage:');
+      expect(console.log).toHaveBeenCalledWith('\n📖 Package Detector Usage:');
       expect(console.log).toHaveBeenCalledWith('  npx package-detector [options]');
     });
 
@@ -178,18 +151,20 @@ describe('Reporter', () => {
     });
 
     it('should display unused packages', () => {
-      const unusedResult: DetectionResult = {
+      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+      
+      reporter.addResult({
         type: 'unused',
         packageName: 'unused-package',
-        message: 'Not imported anywhere',
-        severity: 'medium'
-      };
-
-      reporter.addResult(unusedResult);
+        message: 'Not imported anywhere'
+      });
+      
       reporter.printResults();
-
-      expect(console.log).toHaveBeenCalledWith('❌ Unused Packages:');
+      
+      expect(console.log).toHaveBeenCalledWith('\n❌ Truly Unused Packages:');
       expect(console.log).toHaveBeenCalledWith('  • unused-package - Not imported anywhere');
+      
+      consoleSpy.mockRestore();
     });
 
     it('should display outdated packages', () => {
@@ -203,7 +178,7 @@ describe('Reporter', () => {
       reporter.addResult(outdatedResult);
       reporter.printResults();
 
-      expect(console.log).toHaveBeenCalledWith('⚠️  Outdated Packages:');
+      expect(console.log).toHaveBeenCalledWith('\n⚠️  Outdated Packages:');
       expect(console.log).toHaveBeenCalledWith('  • outdated-package - Current: 1.0.0, Latest: 2.0.0');
     });
 
@@ -218,7 +193,7 @@ describe('Reporter', () => {
       reporter.addResult(duplicateResult);
       reporter.printResults();
 
-      expect(console.log).toHaveBeenCalledWith('💡 Duplicate Packages:');
+      expect(console.log).toHaveBeenCalledWith('\n💡 Duplicate Packages:');
       expect(console.log).toHaveBeenCalledWith('  • duplicate-package - Multiple versions found');
     });
 
@@ -233,7 +208,7 @@ describe('Reporter', () => {
       reporter.addResult(heavyResult);
       reporter.printResults();
 
-      expect(console.log).toHaveBeenCalledWith('🏋️  Heavy Packages:');
+      expect(console.log).toHaveBeenCalledWith('\n🏋️  Heavy Packages:');
       expect(console.log).toHaveBeenCalledWith('  • heavy-package - Large package: 500 KB');
     });
 
@@ -251,7 +226,7 @@ describe('Reporter', () => {
 
       expect(console.log).toHaveBeenCalledWith('📊 Summary:');
       expect(console.log).toHaveBeenCalledWith('  Total issues found: 5');
-      expect(console.log).toHaveBeenCalledWith('  Unused packages: 2');
+      expect(console.log).toHaveBeenCalledWith('  Truly unused packages: 2');
       expect(console.log).toHaveBeenCalledWith('  Outdated packages: 1');
       expect(console.log).toHaveBeenCalledWith('  Duplicate packages: 1');
       expect(console.log).toHaveBeenCalledWith('  Heavy packages: 1');
