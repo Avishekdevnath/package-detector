@@ -9,6 +9,7 @@ A fast and comprehensive Node.js CLI tool to analyze your project's package.json
 - ⚠️ **Outdated Package Detection**: Check for packages that have newer versions available
 - 💡 **Duplicate Package Detection**: Find duplicate packages in your dependency tree
 - 🏋️ **Heavy Package Detection**: Identify large packages that might impact your bundle size
+- 🔗 **GitHub Integration**: Automatically create pull requests for dependency updates with custom labels, reviewers, and commit messages
 - ⚡ **High Performance**: Optimized with caching, parallel processing, and efficient algorithms
 
 ## Performance Optimizations
@@ -66,8 +67,73 @@ npx package-detector --heavy
 # Run multiple detectors
 npx package-detector --unused --outdated
 
+# GitHub Integration
+npx package-detector --github --repo owner/repo --analyze
+npx package-detector --github --repo owner/repo --update --token <GITHUB_TOKEN>
+npx package-detector --github --repo owner/repo --update --token <GITHUB_TOKEN> --labels dependencies,auto-update --reviewers user1,user2 --commit-message "chore: update deps"
+
 # Show help
 npx package-detector --help
+```
+
+## GitHub Integration
+
+The package detector includes powerful GitHub integration for automated dependency management:
+
+### 🔍 **Repository Analysis**
+```bash
+npx package-detector --github --repo owner/repo --analyze
+```
+Analyzes a GitHub repository and shows:
+- Repository information
+- Current dependency status
+- Available updates
+
+### 🔄 **Automated PR Creation**
+```bash
+npx package-detector --github --repo owner/repo --update --token <GITHUB_TOKEN>
+```
+Automatically:
+- Creates a new branch for updates
+- Updates outdated dependencies
+- Creates a pull request with changes
+- Adds custom labels and reviewers (optional)
+
+### 🏷️ **PR Customization Options**
+
+#### **Labels**
+Add custom labels to the created pull request:
+```bash
+npx package-detector --github --repo owner/repo --update --token <GITHUB_TOKEN> --labels dependencies,auto-update,security
+```
+
+#### **Reviewers**
+Request specific reviewers for the PR:
+```bash
+npx package-detector --github --repo owner/repo --update --token <GITHUB_TOKEN> --reviewers reviewer1,reviewer2
+```
+
+#### **Custom Commit Messages**
+Use a custom commit message for dependency updates:
+```bash
+npx package-detector --github --repo owner/repo --update --token <GITHUB_TOKEN> --commit-message "chore: update dependencies via package-detector"
+```
+
+### 🔐 **GitHub Token Setup**
+1. Create a GitHub Personal Access Token with `repo` permissions
+2. Set as environment variable: `export GITHUB_TOKEN=your_token`
+3. Or pass directly: `--token your_token`
+
+### 📋 **Complete Example**
+```bash
+npx package-detector --github \
+  --repo yourname/yourproject \
+  --update \
+  --token <GITHUB_TOKEN> \
+  --labels dependencies,automated,security \
+  --reviewers maintainer1,maintainer2 \
+  --commit-message "chore: automated dependency updates" \
+  --branch main
 ```
 
 ## Output Examples
