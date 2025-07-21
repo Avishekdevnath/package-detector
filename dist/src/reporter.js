@@ -121,6 +121,22 @@ class Reporter {
         console.log(chalk_1.default.gray('  --all         Run all detectors (default)'));
         console.log(chalk_1.default.gray('  --help        Show this help message'));
     }
+    printGitHubHelp() {
+        console.log(chalk_1.default.cyan('\n🔗 GitHub Integration Usage:'));
+        console.log(chalk_1.default.gray('  npx package-detector --github --repo <owner/repo> --analyze'));
+        console.log(chalk_1.default.gray('  npx package-detector --github --repo <owner/repo> --update --token <GITHUB_TOKEN> [--labels label1,label2] [--reviewers user1,user2] [--commit-message "msg"]'));
+        console.log(chalk_1.default.gray('\nOptions:'));
+        console.log(chalk_1.default.gray('  --github         Enable GitHub integration commands'));
+        console.log(chalk_1.default.gray('  --repo           GitHub repository (owner/repo or URL)'));
+        console.log(chalk_1.default.gray('  --token          GitHub personal access token (or set GITHUB_TOKEN env variable)'));
+        console.log(chalk_1.default.gray('  --branch         Base branch (default: main)'));
+        console.log(chalk_1.default.gray('  --analyze        Analyze repository and show info'));
+        console.log(chalk_1.default.gray('  --update         Create PR for dependency updates'));
+        console.log(chalk_1.default.gray('  --labels         Comma-separated PR labels (e.g. dependencies,auto-update)'));
+        console.log(chalk_1.default.gray('  --reviewers      Comma-separated GitHub usernames to request as reviewers'));
+        console.log(chalk_1.default.gray('  --commit-message Custom commit message for dependency update commit'));
+        console.log(chalk_1.default.gray('  --help           Show this help message'));
+    }
 }
 exports.Reporter = Reporter;
 // Export a default instance

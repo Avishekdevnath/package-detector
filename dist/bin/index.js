@@ -15,6 +15,7 @@ const analyzer_1 = require("../src/analyzer");
 const outdatedChecker_1 = require("../src/outdatedChecker");
 const duplicateChecker_1 = require("../src/duplicateChecker");
 const heavyChecker_1 = require("../src/heavyChecker");
+const githubCLI_1 = require("../src/githubCLI");
 function runAllDetectors() {
     return __awaiter(this, void 0, void 0, function* () {
         reporter_1.reporter.printInfo('Running all package detectors...');
@@ -27,6 +28,7 @@ function runAllDetectors() {
     });
 }
 function parseArguments() {
+    var _a, _b;
     const args = process.argv.slice(2);
     return {
         unused: args.includes('--unused'),
@@ -34,14 +36,90 @@ function parseArguments() {
         duplicates: args.includes('--duplicates'),
         heavy: args.includes('--heavy'),
         all: args.includes('--all') || args.length === 0,
-        help: args.includes('--help') || args.includes('-h')
+        help: args.includes('--help') || args.includes('-h'),
+        github: args.includes('--github'),
+        githubRepo: getArgValue('--repo'),
+        githubToken: getArgValue('--token') || githubCLI_1.GitHubCLI.getGitHubToken() || undefined,
+        githubOwner: getArgValue('--owner'),
+        githubBaseBranch: getArgValue('--branch') || 'main',
+        githubAnalyze: args.includes('--analyze'),
+        githubUpdate: args.includes('--update'),
+        githubLabels: (_a = getArgValue('--labels')) === null || _a === void 0 ? void 0 : _a.split(',').map(s => s.trim()).filter(Boolean),
+        githubReviewers: (_b = getArgValue('--reviewers')) === null || _b === void 0 ? void 0 : _b.split(',').map(s => s.trim()).filter(Boolean),
+        githubCommitMessage: getArgValue('--commit-message')
     };
+}
+function getArgValue(argName) {
+    const args = process.argv.slice(2);
+    const index = args.indexOf(argName);
+    if (index !== -1 && index + 1 < args.length) {
+        return args[index + 1];
+    }
+    return undefined;
 }
 function main() {
     return __awaiter(this, void 0, void 0, function* () {
         try {
             const options = parseArguments();
-            // Show help if requested
+            // Handle GitHub integration first
+            if (options.github) {
+                // Show GitHub help if help is requested
+                if (options.help) {
+                    reporter_1.reporter.printGitHubHelp();
+                    return;
+                }
+                if (options.githubAnalyze) {
+                    // Analyze GitHub repository
+                    const repo = options.githubRepo;
+                    if (!repo) {
+                        reporter_1.reporter.printError('❌ Repository is required for GitHub analysis. Use --repo option.');
+                        return;
+                    }
+                    const parsedRepo = githubCLI_1.GitHubCLI.parseRepository(repo);
+                    if (!parsedRepo) {
+                        reporter_1.reporter.printError('❌ Invalid repository format. Use owner/repo or GitHub URL.');
+                        return;
+                    }
+                    yield githubCLI_1.GitHubCLI.analyzeDependencies({
+                        token: options.githubToken,
+                        owner: parsedRepo.owner,
+                        repo: parsedRepo.repo,
+                        baseBranch: options.githubBaseBranch
+                    });
+                    return;
+                }
+                if (options.githubUpdate) {
+                    // Create PR for dependency updates
+                    const repo = options.githubRepo;
+                    if (!repo) {
+                        reporter_1.reporter.printError('❌ Repository is required for GitHub updates. Use --repo option.');
+                        return;
+                    }
+                    const parsedRepo = githubCLI_1.GitHubCLI.parseRepository(repo);
+                    if (!parsedRepo) {
+                        reporter_1.reporter.printError('❌ Invalid repository format. Use owner/repo or GitHub URL.');
+                        return;
+                    }
+                    if (!options.githubToken) {
+                        reporter_1.reporter.printError('❌ GitHub token is required. Set GITHUB_TOKEN environment variable or use --token option.');
+                        return;
+                    }
+                    yield githubCLI_1.GitHubCLI.createUpdatePR({
+                        token: options.githubToken,
+                        owner: parsedRepo.owner,
+                        repo: parsedRepo.repo,
+                        baseBranch: options.githubBaseBranch,
+                        prLabels: options.githubLabels,
+                        prReviewers: options.githubReviewers,
+                        commitMessage: options.githubCommitMessage
+                    });
+                    return;
+                }
+                // Default GitHub command - show help
+                reporter_1.reporter.printGitHubHelp();
+                return;
+            }
+            // Show help if requested (for non-GitHub commands)
             if (options.help) {
                 reporter_1.reporter.printHelp();
                 return;

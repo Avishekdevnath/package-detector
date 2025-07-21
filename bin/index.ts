@@ -71,14 +71,14 @@ async function main(): Promise<void> {
   try {
     const options = parseArguments();
 
-    // Show help if requested
-    if (options.help) {
-      reporter.printHelp();
-      return;
-    }
-
-    // Handle GitHub integration
+    // Handle GitHub integration first
     if (options.github) {
+      // Show GitHub help if help is requested
+      if (options.help) {
+        reporter.printGitHubHelp();
+        return;
+      }
+      
       if (options.githubAnalyze) {
         // Analyze GitHub repository
         const repo = options.githubRepo;
@@ -135,6 +135,12 @@ async function main(): Promise<void> {
       
       // Default GitHub command - show help
       reporter.printGitHubHelp();
+      return;
+    }
+
+    // Show help if requested (for non-GitHub commands)
+    if (options.help) {
+      reporter.printHelp();
       return;
     }
 
