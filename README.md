@@ -286,7 +286,8 @@ MIT License - see LICENSE file for details.
 
 ## Author
 
-**Avishek Devnath**
+**Avishek Devnath**  
+Email: avishekdevnath@gmail.com
 - GitHub: [@avishekdevnath](https://github.com/avishekdevnath)
 - NPM: [package-detector](https://www.npmjs.com/package/package-detector)
 

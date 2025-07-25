@@ -31,7 +31,7 @@
     "npm",
     "analysis"
   ],
-  "author": "Avishek Devnath",
+  "author": "Avishek Devnath <avishekdevnath@gmail.com>",
   "license": "MIT",
   "dependencies": {
     "@octokit/rest": "^20.0.2",
